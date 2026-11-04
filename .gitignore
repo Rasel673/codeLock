@@ -1,0 +1,39 @@
+
+# Dependencies
+/vendor/
+
+# Laravel development environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test artifacts
+.phpunit.cache/
+coverage/
+
+# Temporary files
+*.tmp
+*.bak
+
+# Private signing keys and secrets
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+private-keys/
+
+# Local package testing
+build/
+dist/

@@ -1,0 +1,61 @@
+{
+    "name": "rasel/codelock",
+    "description": "Commercial software license verification, remote enforcement, and integrity protection for Laravel applications.",
+    "keywords": [
+        "laravel",
+        "licensing",
+        "license-manager",
+        "license-server",
+        "security",
+        "ed25519",
+        "copy-protection"
+    ],
+    "type": "library",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Rasel",
+            "role": "Lead Architect"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^11.0|^12.0",
+        "illuminate/contracts": "^11.0|^12.0",
+        "illuminate/http": "^11.0|^12.0",
+        "illuminate/console": "^11.0|^12.0",
+        "illuminate/routing": "^11.0|^12.0",
+        "guzzlehttp/guzzle": "^7.8",
+        "paragonie/sodium_compat": "^1.20"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^9.0|^10.0",
+        "phpunit/phpunit": "^10.5|^11.0",
+        "mockery/mockery": "^1.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rasel\\CodeLock\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Rasel\\CodeLock\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rasel\\CodeLock\\CodeLockServiceProvider"
+            ],
+            "aliases": {
+                "CodeLock": "Rasel\\CodeLock\\Facades\\CodeLock"
+            }
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

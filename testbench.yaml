@@ -1,0 +1,7 @@
+providers:
+  - Rasel\CodeLock\CodeLockServiceProvider
+
+workbench:
+  start: '/'
+  routes: true
+
