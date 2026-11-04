@@ -1,4 +1,4 @@
-# CodeLock for Laravel (`rasel/codelock`)
+# CodeLock for Laravel (`rasel673/codelock`)
 
 [![PHP Version](https://img.shields.io/badge/PHP-8.2%2B-blue.svg)](https://php.net)
 [![Laravel Version](https://img.shields.io/badge/Laravel-11%20%7C%2012-red.svg)](https://laravel.com)
@@ -27,7 +27,7 @@
 Install the package via Composer into your Laravel application:
 
 ```bash
-composer require rasel/codelock
+composer require rasel673/codelock
 ```
 
 After installation, run the automated installer command to publish the configuration and view assets:
@@ -282,4 +282,3 @@ CodeLock incorporates a cryptographically verified remote kill switch and self-s
 > - CodeLock **does not claim impossible 100% tamper prevention** against a skilled developer who modifies the integrity checker itself or strips the package loader from `composer.json`.
 > - **Server Policy Rule:** The licensing server treats client tamper reports as investigative security alerts and audit events; it never automatically revokes a paying customer's license solely from an unverified client report.
 > - For absolute execution immutability, distribute your commercial application alongside commercial PHP bytecode encryption (such as IonCube or SourceGuardian) or a compiled C extension.
-

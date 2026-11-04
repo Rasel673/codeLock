@@ -54,10 +54,10 @@ php artisan codelock:status
 ---
 
 ### Method 3: Recovering from Package Integrity Violations (`E_INTEGRITY_MISMATCH`)
-If an unauthorized modification was made to files in `vendor/rasel/codelock-laravel/`:
+If an unauthorized modification was made to files in `vendor/rasel673/codelock-laravel/`:
 1. Reinstall the clean package files from the private repository:
    ```bash
-   composer reinstall rasel/codelock-laravel
+   composer reinstall rasel673/codelock-laravel
    ```
 2. Clear internal caches:
    ```bash
@@ -84,4 +84,3 @@ If an isolated customer server experiences a complete network outage during an e
    storage/app/.codelock.status
    ```
 4. The client application cryptographically verifies the vendor's signature and immediately grants temporary access for the specified duration.
-

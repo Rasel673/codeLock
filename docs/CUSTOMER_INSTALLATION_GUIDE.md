@@ -41,7 +41,7 @@ Add the private repository to your `composer.json` using the deploy token suppli
    ```
 3. Install package:
    ```bash
-   composer require rasel/codelock-laravel
+   composer require rasel673/codelock-laravel
    ```
 
 ### Step 2: Publish Configuration & Views
@@ -138,4 +138,3 @@ Ensure the Laravel scheduler is configured on your server or cPanel hosting:
 * * * * * cd /path/to/your/application && php artisan schedule:run >> /dev/null 2>&1
 ```
 CodeLock automatically checks in with the licensing authority once per day to ensure license continuity and download renewals.
-

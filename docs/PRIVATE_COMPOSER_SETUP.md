@@ -1,6 +1,6 @@
 # Private Composer Distribution Guide
 
-This guide describes how to distribute the proprietary **`rasel/codelock-laravel`** package securely from a private GitHub repository without publishing to public Packagist.
+This guide describes how to distribute the proprietary **`rasel673/codelock-laravel`** package securely from a private GitHub repository without publishing to public Packagist.
 
 ---
 
@@ -10,7 +10,7 @@ This guide describes how to distribute the proprietary **`rasel/codelock-laravel
 flowchart LR
     DEV["Software Vendor"] -->|git push / tag| GH_REPO["Private GitHub Repo:<br/>your-org/codelock-laravel"]
     GH_REPO -->|Read-Only Deploy Token| COMPOSER["Customer Composer Client"]
-    COMPOSER -->|vendor/rasel/codelock-laravel| APP["Customer Laravel Application"]
+    COMPOSER -->|vendor/rasel673/codelock-laravel| APP["Customer Laravel Application"]
 ```
 
 ---
@@ -68,16 +68,16 @@ In the customer application's `composer.json`:
     ],
     "require": {
         "php": "^8.2",
-        "rasel/codelock-laravel": "^1.0"
+        "rasel673/codelock-laravel": "^1.0"
     }
 }
 ```
 
 ### Step 4: Run Composer Install
 ```bash
-composer require rasel/codelock-laravel
+composer require rasel673/codelock-laravel
 ```
-Composer will authenticate using the read-only token, clone the private repository archive into `vendor/rasel/codelock-laravel`, and lock the release version in `composer.lock`.
+Composer will authenticate using the read-only token, clone the private repository archive into `vendor/rasel673/codelock-laravel`, and lock the release version in `composer.lock`.
 
 ---
 
@@ -136,4 +136,3 @@ If deploying to dozens of client instances, run a private Satis mirror on your V
        }
    }
    ```
-
