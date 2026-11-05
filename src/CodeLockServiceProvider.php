@@ -153,21 +153,37 @@ class CodeLockServiceProvider extends ServiceProvider
                 }
             }
 
-            $intervalHours = (int) config('codelock.heartbeat_interval', 6);
+            $minutes = config('codelock.heartbeat_interval_minutes');
             $event = $schedule->command('codelock:heartbeat');
 
-            match ($intervalHours) {
-                1 => $event->hourly(),
-                2 => $event->everyTwoHours(),
-                3 => $event->everyThreeHours(),
-                4 => $event->everyFourHours(),
-                6 => $event->everySixHours(),
-                12 => $event->twiceDaily(0, 12),
-                24 => $event->daily(),
-                default => ($intervalHours > 0 && $intervalHours < 24 && (24 % $intervalHours === 0))
-                    ? $event->cron("0 */{$intervalHours} * * *")
-                    : $event->cron("0 */" . max(1, min(24, $intervalHours)) . " * * *"),
-            };
+            if ($minutes !== null && (int) $minutes > 0) {
+                $mins = (int) $minutes;
+                match ($mins) {
+                    1 => $event->everyMinute(),
+                    2 => $event->everyTwoMinutes(),
+                    5 => $event->everyFiveMinutes(),
+                    10 => $event->everyTenMinutes(),
+                    15 => $event->everyFifteenMinutes(),
+                    30 => $event->everyThirtyMinutes(),
+                    default => ($mins < 60 && (60 % $mins === 0))
+                        ? $event->cron("*/{$mins} * * * *")
+                        : $event->cron("*/" . max(1, min(59, $mins)) . " * * * *"),
+                };
+            } else {
+                $intervalHours = (int) config('codelock.heartbeat_interval', 6);
+                match ($intervalHours) {
+                    1 => $event->hourly(),
+                    2 => $event->everyTwoHours(),
+                    3 => $event->everyThreeHours(),
+                    4 => $event->everyFourHours(),
+                    6 => $event->everySixHours(),
+                    12 => $event->twiceDaily(0, 12),
+                    24 => $event->daily(),
+                    default => ($intervalHours > 0 && $intervalHours < 24 && (24 % $intervalHours === 0))
+                        ? $event->cron("0 */{$intervalHours} * * *")
+                        : $event->cron("0 */" . max(1, min(24, $intervalHours)) . " * * *"),
+                };
+            }
 
             $event->withoutOverlapping(60)
                   ->name('codelock-heartbeat')

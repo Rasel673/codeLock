@@ -80,14 +80,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Heartbeat Interval (Hours)
+    | Heartbeat Interval
     |--------------------------------------------------------------------------
     |
     | How often the client application should check in with the central
     | server to synchronize license state and remote lock policies.
+    | Set heartbeat_interval (hours, default 6) or heartbeat_interval_minutes
+    | (default 5 for testing).
     |
     */
     'heartbeat_interval' => (int) env('CODELOCK_HEARTBEAT_INTERVAL', 6),
+    'heartbeat_interval_minutes' => (int) env('CODELOCK_HEARTBEAT_INTERVAL_MINUTES', 5),
 
     /*
     |--------------------------------------------------------------------------

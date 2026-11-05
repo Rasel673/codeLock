@@ -66,6 +66,9 @@ CODELOCK_PUBLIC_KEY=your_base64_encoded_ed25519_public_key_here
 CODELOCK_OFFLINE_GRACE_PERIOD=7
 CODELOCK_HEARTBEAT_INTERVAL=6
 
+# Set high-frequency interval in minutes for testing (e.g. 5 minutes)
+CODELOCK_HEARTBEAT_INTERVAL_MINUTES=5
+
 # Global Middleware Enforcement (true to guard all web and API routes automatically)
 CODELOCK_GLOBAL_MIDDLEWARE=true
 
@@ -136,7 +139,9 @@ CodeLock **automatically registers** the heartbeat synchronization command in La
 
 ### How It Operates:
 - **Zero Configuration Required**: The scheduler automatically picks up `codelock:heartbeat` when the package is installed.
-- **Configurable Interval**: Set `CODELOCK_HEARTBEAT_INTERVAL` in `.env` (defaults to `6` hours).
+- **Configurable Interval**:
+  - **Testing Mode**: Set `CODELOCK_HEARTBEAT_INTERVAL_MINUTES=5` in `.env` to check in every 5 minutes.
+  - **Production Mode**: Set `CODELOCK_HEARTBEAT_INTERVAL=6` in `.env` to check in every 6 hours.
 - **Concurrency & Overlap Protection**: Runs with `withoutOverlapping(60)` to prevent duplicate concurrent heartbeat tasks.
 - **Smart Guards**: Automatically skips heartbeat check-ins when CodeLock is disabled or when no license certificate is installed.
 - **Resilient Offline Grace**: If the licensing server is temporarily unreachable, the software seamlessly operates in offline grace period mode (default: 7 days) and does not noisily fail cron executions.
@@ -148,7 +153,12 @@ To inspect the scheduled heartbeat task in your Laravel application:
 php artisan schedule:list
 ```
 
-Output:
+Output (Testing Mode):
+```
+*/5 * * * *  php artisan codelock:heartbeat ... Next Due: 5 minutes from now
+```
+
+Output (Production Mode):
 ```
 0 */6 * * *  php artisan codelock:heartbeat ... Next Due: X hours from now
 ```

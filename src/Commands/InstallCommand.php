@@ -52,8 +52,13 @@ class InstallCommand extends Command
         $this->newLine();
         $this->line("Installation Fingerprint: <comment>{$fingerprint}</comment>");
         $this->line('Global Enforcement Middleware: <info>Active (EnsureLicensed)</info>');
-        $heartbeatHours = (int) config('codelock.heartbeat_interval', 6);
-        $this->line("Automated Heartbeat Scheduler: <info>Active (Every {$heartbeatHours} Hours)</info>");
+        $heartbeatMins = config('codelock.heartbeat_interval_minutes');
+        if (!empty($heartbeatMins) && (int) $heartbeatMins > 0) {
+            $this->line("Automated Heartbeat Scheduler: <info>Active (Every {$heartbeatMins} Minutes - Testing Mode)</info>");
+        } else {
+            $heartbeatHours = (int) config('codelock.heartbeat_interval', 6);
+            $this->line("Automated Heartbeat Scheduler: <info>Active (Every {$heartbeatHours} Hours)</info>");
+        }
         $this->info('CodeLock package installed successfully.');
         $this->line('To activate your license, run: <comment>php artisan codelock:activate</comment>');
 

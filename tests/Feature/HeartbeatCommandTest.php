@@ -174,6 +174,21 @@ class HeartbeatCommandTest extends TestCase
         $this->assertGreaterThan(0, $this->storage->getLastSyncTimestamp());
     }
 
+    public function test_heartbeat_command_reports_when_check_in_is_skipped_by_interval(): void
+    {
+        $cert = $this->createSignedCertificate([
+            'lic' => 'CLK-2026-HB-SKIPPED',
+            'dom' => ['localhost'],
+        ]);
+        $this->storage->saveCertificate($cert);
+        $this->storage->recordLastSyncTimestamp(time());
+
+        $this->artisan('codelock:heartbeat')
+            ->expectsOutputToContain('Heartbeat skipped: interval has not elapsed.')
+            ->doesntExpectOutputToContain('Heartbeat check-in successful.')
+            ->assertExitCode(0);
+    }
+
     public function test_heartbeat_command_handles_network_failure_with_offline_grace(): void
     {
         $cert = $this->createSignedCertificate([
@@ -274,11 +289,33 @@ class HeartbeatCommandTest extends TestCase
         $this->assertNotEmpty($heartbeatEvents, 'codelock:heartbeat must be registered in the application scheduler.');
 
         $event = reset($heartbeatEvents);
-        // Default interval is 6 hours: cron "0 */6 * * *"
-        $this->assertSame('0 */6 * * *', $event->expression);
+        // Configured for 5 minutes for testing: cron "*/5 * * * *"
+        $this->assertSame('*/5 * * * *', $event->expression);
 
         // Verify withoutOverlapping is active
         $this->assertTrue($event->withoutOverlapping, 'Heartbeat schedule event must have withoutOverlapping enabled.');
+    }
+
+    public function test_automatic_schedule_registration_with_hourly_interval(): void
+    {
+        $schedule = new Schedule();
+        $this->app->instance(Schedule::class, $schedule);
+        config([
+            'codelock.heartbeat_interval_minutes' => null,
+            'codelock.heartbeat_interval' => 6,
+        ]);
+
+        $provider = $this->app->getProvider(\Rasel\CodeLock\CodeLockServiceProvider::class);
+        $ref = new \ReflectionMethod($provider, 'registerSchedule');
+        $ref->invoke($provider);
+
+        $events = $schedule->events();
+        $heartbeatEvents = array_filter($events, function ($event) {
+            return is_string($event->command) && str_contains($event->command, 'codelock:heartbeat');
+        });
+
+        $event = reset($heartbeatEvents);
+        $this->assertSame('0 */6 * * *', $event->expression);
     }
 
     public function test_scheduler_prevents_duplicate_tasks(): void

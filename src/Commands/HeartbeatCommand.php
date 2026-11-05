@@ -96,6 +96,11 @@ class HeartbeatCommand extends Command
 
             // Check if heartbeat succeeded
             if ($result->isSuccess()) {
+                if (str_starts_with($result->getMessage(), 'Heartbeat skipped:')) {
+                    $this->info($result->getMessage());
+                    return Command::SUCCESS;
+                }
+
                 $remoteStatus = $result->getStatus();
                 $statusVal = $remoteStatus?->getStatus()->value ?? 'ACTIVE';
 

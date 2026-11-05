@@ -24,6 +24,7 @@ class LicenseHeartbeat
     protected string|array $publicKeys;
     protected ?string $productId;
     protected int $intervalHours;
+    protected ?int $intervalMinutes;
     protected int $gracePeriodDays;
 
     public function __construct(
@@ -35,7 +36,8 @@ class LicenseHeartbeat
         string|array|null $publicKeys = null,
         ?string $productId = null,
         ?int $intervalHours = null,
-        ?int $gracePeriodDays = null
+        ?int $gracePeriodDays = null,
+        ?int $intervalMinutes = null
     ) {
         $this->storage = $storage ?? new LicenseStorage();
         $this->client = $client ?? new LicenseClient();
@@ -45,6 +47,11 @@ class LicenseHeartbeat
         $this->publicKeys = $publicKeys ?? config('codelock.public_keys', config('codelock.public_key', ''));
         $this->productId = $productId ?? config('codelock.product_id');
         $this->intervalHours = $intervalHours ?? (int) config('codelock.heartbeat_interval', 6);
+        $this->intervalMinutes = $intervalMinutes ?? (
+            $intervalHours !== null
+                ? null
+                : (config('codelock.heartbeat_interval_minutes') !== null ? (int) config('codelock.heartbeat_interval_minutes') : null)
+        );
         $this->gracePeriodDays = $gracePeriodDays ?? (int) config('codelock.offline_grace_period', 7);
     }
 
@@ -200,8 +207,28 @@ class LicenseHeartbeat
             return true;
         }
 
-        $intervalSeconds = $this->intervalHours * 3600;
+        $intervalSeconds = $this->getIntervalSeconds();
         return (time() - $lastSync) >= $intervalSeconds;
+    }
+
+    /**
+     * Get the effective heartbeat interval in seconds.
+     */
+    public function getIntervalSeconds(): int
+    {
+        if ($this->intervalMinutes !== null && $this->intervalMinutes > 0) {
+            return $this->intervalMinutes * 60;
+        }
+
+        return $this->intervalHours * 3600;
+    }
+
+    /**
+     * Get the configured interval in minutes, if any.
+     */
+    public function getIntervalMinutes(): ?int
+    {
+        return $this->intervalMinutes;
     }
 
     /**
