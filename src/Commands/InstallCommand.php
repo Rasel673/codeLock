@@ -47,10 +47,13 @@ class InstallCommand extends Command
             ]
         );
 
-        // 4. Display Machine Fingerprint
+        // 4. Display Machine Fingerprint & Package Status
         $fingerprint = MachineFingerprint::get();
         $this->newLine();
         $this->line("Installation Fingerprint: <comment>{$fingerprint}</comment>");
+        $this->line('Global Enforcement Middleware: <info>Active (EnsureLicensed)</info>');
+        $heartbeatHours = (int) config('codelock.heartbeat_interval', 6);
+        $this->line("Automated Heartbeat Scheduler: <info>Active (Every {$heartbeatHours} Hours)</info>");
         $this->info('CodeLock package installed successfully.');
         $this->line('To activate your license, run: <comment>php artisan codelock:activate</comment>');
 

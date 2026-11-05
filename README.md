@@ -64,7 +64,10 @@ CODELOCK_PUBLIC_KEY=your_base64_encoded_ed25519_public_key_here
 
 # Heartbeat & Grace Policy
 CODELOCK_OFFLINE_GRACE_PERIOD=7
-CODELOCK_HEARTBEAT_INTERVAL=24
+CODELOCK_HEARTBEAT_INTERVAL=6
+
+# Global Middleware Enforcement (true to guard all web and API routes automatically)
+CODELOCK_GLOBAL_MIDDLEWARE=true
 
 # Support contact information shown on the lock screen
 CODELOCK_CONTACT_EMAIL=support@yourdomain.com
@@ -76,11 +79,22 @@ CODELOCK_ALLOW_LOCAL=false
 
 ---
 
-## Protecting Routes (Middleware)
+## Global Middleware & Route Protection
 
-CodeLock registers the `codelock` middleware alias (as well as `codelock.verify`). You can attach it to individual routes or route groups:
+### Automatic Global Enforcement (Default)
+When installed, CodeLock **automatically registers `EnsureLicensed` as a global HTTP middleware** across the application. All incoming HTTP traffic (web and API) is automatically verified against your license policies without requiring manual middleware additions.
 
-### Laravel 11 & 12 (`routes/web.php` or `routes/api.php`)
+- **Route Exclusions**: Health probes and internal endpoints (`/up`, `/health`, `/healthz`, `/codelock/*`) bypass license verification automatically via `config('codelock.excluded_paths')`.
+- **Request Memoization**: The verification result is cached in memory per request (`_codelock_result`), guaranteeing zero redundant cryptographic operations during request lifecycle.
+
+If you prefer to manually protect specific route groups rather than using global enforcement, disable automatic registration in `.env`:
+
+```dotenv
+CODELOCK_GLOBAL_MIDDLEWARE=false
+```
+
+### Manual Route Protection (Optional)
+When global enforcement is disabled, use the registered `codelock` (or `codelock.verify`) middleware alias:
 
 ```php
 use Illuminate\Support\Facades\Route;
@@ -98,16 +112,6 @@ Route::middleware(['api', 'codelock'])->prefix('api/v1')->group(function () {
 });
 ```
 
-To protect all web routes globally, add it in `bootstrap/app.php`:
-
-```php
-->withMiddleware(function (Middleware $middleware) {
-    $middleware->web(append: [
-        \Rasel\CodeLock\Middleware\EnsureLicensed::class,
-    ]);
-})
-```
-
 ---
 
 ## Artisan CLI Commands
@@ -118,21 +122,42 @@ CodeLock includes a complete suite of management commands:
 | :--- | :--- |
 | `php artisan codelock:install` | Publishes config, views, inspects environment, and outputs installation fingerprint. |
 | `php artisan codelock:activate [key] [--domain=]` | Activates a commercial license key for the current domain. |
+| `php artisan codelock:heartbeat [--force]` | Sends an authenticated check-in to the central license server, verifies the signed Ed25519 response, and synchronizes status. |
 | `php artisan codelock:status [--domain=]` | Displays a comprehensive CLI status table showing health, product, and expiry. |
 | `php artisan codelock:check [--silent]` | Verifies license and returns exit code `0` (valid) or `1` (invalid) for CI/CD or crons. |
-| `php artisan codelock:refresh` | Forces a heartbeat synchronization with the remote server to pull lock orders. |
+| `php artisan codelock:refresh` | Forces a status refresh and synchronizes remote lock orders with the server. |
 | `php artisan codelock:deactivate [--force]` | Releases the license on the remote server and wipes local certificates. |
 
 ---
 
 ## Automated Heartbeat Scheduler
 
-To ensure remote locks and renewals propagate automatically, register the heartbeat task in `routes/console.php`:
+CodeLock **automatically registers** the heartbeat synchronization command in Laravel's Task Scheduler through the package Service Provider.
 
-```php
-use Illuminate\Support\Facades\Schedule;
+### How It Operates:
+- **Zero Configuration Required**: The scheduler automatically picks up `codelock:heartbeat` when the package is installed.
+- **Configurable Interval**: Set `CODELOCK_HEARTBEAT_INTERVAL` in `.env` (defaults to `6` hours).
+- **Concurrency & Overlap Protection**: Runs with `withoutOverlapping(60)` to prevent duplicate concurrent heartbeat tasks.
+- **Smart Guards**: Automatically skips heartbeat check-ins when CodeLock is disabled or when no license certificate is installed.
+- **Resilient Offline Grace**: If the licensing server is temporarily unreachable, the software seamlessly operates in offline grace period mode (default: 7 days) and does not noisily fail cron executions.
 
-Schedule::command('codelock:refresh')->everySixHours()->runInBackground();
+### Inspecting Scheduled Tasks
+To inspect the scheduled heartbeat task in your Laravel application:
+
+```bash
+php artisan schedule:list
+```
+
+Output:
+```
+0 */6 * * *  php artisan codelock:heartbeat ... Next Due: X hours from now
+```
+
+### Production Cron Setup
+To ensure Laravel executes scheduled tasks in production, add standard Laravel scheduler cron to your server's crontab:
+
+```bash
+* * * * * cd /path-to-your-application && php artisan schedule:run >> /dev/null 2>&1
 ```
 
 ---

@@ -101,6 +101,11 @@ class LicenseVerificationResult implements ArrayAccess, Arrayable
         return $this->context;
     }
 
+    public function getDomain(): ?string
+    {
+        return $this->context['domain'] ?? null;
+    }
+
     /**
      * Check if a specific signed feature entitlement is granted.
      */

@@ -101,7 +101,12 @@ class LicenseClient
             'nonce' => bin2hex(random_bytes(16)),
         ], $extra);
 
-        return $this->post('/api/v1/license/heartbeat', $payload, $cleanKey);
+        $customHeaders = [];
+        if (!empty($extra['token'])) {
+            $customHeaders['Authorization'] = 'Bearer ' . $extra['token'];
+        }
+
+        return $this->post('/api/v1/license/heartbeat', $payload, $cleanKey, $customHeaders);
     }
 
     /**

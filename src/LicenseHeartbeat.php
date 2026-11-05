@@ -2,10 +2,12 @@
 
 namespace Rasel\CodeLock;
 
+use Illuminate\Support\Facades\Log;
 use Rasel\CodeLock\Exceptions\LicenseNotFoundException;
 use Rasel\CodeLock\Exceptions\ServerCommunicationException;
 use Rasel\CodeLock\Storage\LicenseStorage;
 use Rasel\CodeLock\Support\CanonicalJson;
+use Rasel\CodeLock\Support\LicenseKey;
 use Rasel\CodeLock\Support\MachineFingerprint;
 
 /**
@@ -42,7 +44,7 @@ class LicenseHeartbeat
         $this->integrityMonitor = $integrityMonitor ?? new IntegrityMonitor(storage: $this->storage);
         $this->publicKeys = $publicKeys ?? config('codelock.public_keys', config('codelock.public_key', ''));
         $this->productId = $productId ?? config('codelock.product_id');
-        $this->intervalHours = $intervalHours ?? (int) config('codelock.heartbeat_interval', 24);
+        $this->intervalHours = $intervalHours ?? (int) config('codelock.heartbeat_interval', 6);
         $this->gracePeriodDays = $gracePeriodDays ?? (int) config('codelock.offline_grace_period', 7);
     }
 
@@ -73,7 +75,9 @@ class LicenseHeartbeat
         // 3. Assemble Heartbeat Payload
         $payload = $certificate['payload'] ?? [];
         $licenseKey = (string) ($payload['lic'] ?? config('codelock.license_key', ''));
-        $instanceId = (string) (config('codelock.installation_id') ?? MachineFingerprint::get());
+        $installationId = (string) ($certificate['installation_id'] ?? config('codelock.installation_id') ?? MachineFingerprint::get());
+        $installationHash = MachineFingerprint::get();
+        $token = $certificate['installation_token'] ?? null;
         $productId = (string) ($payload['prd'] ?? $this->productId ?? config('codelock.product_id', ''));
         $domain = $this->verifier->resolveDomain();
         $packageVersion = '1.0.0';
@@ -88,16 +92,24 @@ class LicenseHeartbeat
 
         // 4. Perform Network Request with Network Timeout & Offline Grace Handling
         $sessionNonce = bin2hex(random_bytes(16));
+        $extraPayload = [
+            'nonce' => $sessionNonce,
+            'installation_hash' => $installationHash,
+        ];
+        if (!empty($token)) {
+            $extraPayload['token'] = $token;
+        }
+
         try {
             $response = $this->client->heartbeat(
                 licenseKey: $licenseKey,
-                installationId: $instanceId,
+                installationId: $installationId,
                 domain: $domain,
                 installedHash: $installedHash,
                 productId: $productId,
                 packageVersion: $packageVersion,
                 integrityStatus: $integrityStatus,
-                extra: ['nonce' => $sessionNonce]
+                extra: $extraPayload
             );
         } catch (ServerCommunicationException $e) {
             return $this->handleOfflineGrace($certificate, $e->getMessage());
@@ -120,6 +132,10 @@ class LicenseHeartbeat
         }
 
         if (!empty($this->publicKeys) && !$remoteStatus->verifySignature($this->publicKeys)) {
+            Log::error('CodeLock heartbeat failed: Ed25519 signature on server status response was invalid.', [
+                'domain' => $domain,
+                'license_key' => LicenseKey::mask($licenseKey),
+            ]);
             $this->reporter->reportInvalidSignature('heartbeat_response', 'Ed25519 signature on server status response was invalid.');
             return HeartbeatResult::failure('Invalid cryptographic signature on remote license status response.', 'E_SIGNATURE_INVALID', $response);
         }
@@ -161,6 +177,12 @@ class LicenseHeartbeat
             }
         }
 
+        Log::info('CodeLock heartbeat synchronized successfully.', [
+            'status' => $remoteStatus->getStatus()->value,
+            'domain' => $domain,
+            'license_key' => LicenseKey::mask($licenseKey),
+        ]);
+
         return HeartbeatResult::success($remoteStatus);
     }
 
@@ -201,12 +223,22 @@ class LicenseHeartbeat
             $remainingSeconds = max(0, $totalGraceSeconds - $elapsedSeconds);
             $cachedStatus = $this->getCachedRemoteStatus();
 
+            Log::warning('CodeLock heartbeat server unreachable: operating within offline grace period.', [
+                'reason' => $errorReason,
+                'grace_remaining_days' => round($remainingSeconds / 86400, 1),
+            ]);
+
             return HeartbeatResult::grace(
                 remainingSeconds: $remainingSeconds,
                 message: "Operating in offline grace period ({$this->gracePeriodDays} days). Network error: {$errorReason}",
                 cachedStatus: $cachedStatus
             );
         }
+
+        Log::error('CodeLock offline grace period has elapsed. Server connection required.', [
+            'reason' => $errorReason,
+            'grace_period_days' => $this->gracePeriodDays,
+        ]);
 
         // Grace period has fully elapsed!
         return HeartbeatResult::graceExpired(

@@ -87,7 +87,18 @@ return [
     | server to synchronize license state and remote lock policies.
     |
     */
-    'heartbeat_interval' => (int) env('CODELOCK_HEARTBEAT_INTERVAL', 24),
+    'heartbeat_interval' => (int) env('CODELOCK_HEARTBEAT_INTERVAL', 6),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Automatic Global Middleware Registration
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, CodeLock automatically registers the license verification
+    | middleware globally across all incoming HTTP requests.
+    |
+    */
+    'auto_register_middleware' => env('CODELOCK_GLOBAL_MIDDLEWARE', true),
 
     /*
     |--------------------------------------------------------------------------

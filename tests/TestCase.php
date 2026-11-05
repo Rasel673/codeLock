@@ -62,6 +62,11 @@ abstract class TestCase extends OrchestraTestCase
             @unlink($publishedView);
         }
 
+        $publishedConfig = config_path('codelock.php');
+        if (file_exists($publishedConfig)) {
+            @unlink($publishedConfig);
+        }
+
         parent::tearDown();
     }
 
