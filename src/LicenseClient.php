@@ -25,12 +25,13 @@ class LicenseClient
         ?int $timeout = null,
         ?GuzzleClient $http = null
     ) {
-        $this->serverUrl = rtrim($serverUrl ?? (string) config('codelock.license_server_url', ''), '/');
+        $this->serverUrl = rtrim($serverUrl ?? (string) config('codelock.server_url', config('codelock.license_server_url', '')), '/');
         $this->productId = $productId ?? config('codelock.product_id');
-        $this->timeout = $timeout ?? (int) config('codelock.request_timeout', 10);
+        $this->timeout = $timeout ?? (int) config('codelock.heartbeat_request_timeout', config('codelock.request_timeout', 5));
+        $connectTimeout = (int) config('codelock.heartbeat_connect_timeout', 3);
         $this->http = $http ?? new GuzzleClient([
             'timeout' => $this->timeout,
-            'connect_timeout' => 5,
+            'connect_timeout' => $connectTimeout,
             'http_errors' => false,
         ]);
     }

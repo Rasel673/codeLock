@@ -62,6 +62,12 @@ class HeartbeatCommand extends Command
         $force = (bool) $this->option('force');
         $this->info('Sending heartbeat check-in to CodeLock license server...');
 
+        $lock = $storage->acquireSyncLock(120);
+        if (!$lock) {
+            $this->warn('Another heartbeat synchronization is currently in progress. Skipping.');
+            return Command::SUCCESS;
+        }
+
         try {
             $result = $manager->heartbeat($force);
 
@@ -152,6 +158,8 @@ class HeartbeatCommand extends Command
             $this->error('Unexpected error during heartbeat check-in: ' . $e->getMessage());
             Log::error('CodeLock: Unexpected heartbeat exception: ' . $e->getMessage());
             return Command::FAILURE;
+        } finally {
+            $storage->releaseSyncLock($lock);
         }
     }
 }

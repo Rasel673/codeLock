@@ -5,6 +5,7 @@ namespace Rasel\CodeLock\Middleware;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Rasel\CodeLock\Enums\LicenseStatus;
 use Rasel\CodeLock\LicenseManager;
 use Rasel\CodeLock\Support\MachineFingerprint;
@@ -153,5 +154,68 @@ class EnsureLicensed
         return $request->expectsJson()
             || $request->is('api/*')
             || str_contains((string) $request->header('Accept'), 'application/json');
+    }
+
+    /**
+     * Perform post-response actions, including automatic request-triggered heartbeat synchronization without cron.
+     *
+     * @param Request $request
+     * @param Response $response
+     * @return void
+     */
+    public function terminate(Request $request, Response $response): void
+    {
+        // 1. Check if CodeLock and automatic synchronization are enabled
+        if (!$this->manager->isEnabled()) {
+            return;
+        }
+
+        if (!config('codelock.automatic_sync', true) || !config('codelock.heartbeat_enabled', true)) {
+            return;
+        }
+
+        // 2. Check if a local license certificate is installed
+        $storage = $this->manager->getStorage();
+        if (!$storage->hasCertificate()) {
+            return;
+        }
+
+        // 3. Skip excluded routes (health probes, webhook callbacks, etc.)
+        if ($this->isExcludedRoute($request)) {
+            return;
+        }
+
+        // 4. Verify local certificate is currently recognized
+        $hostname = $this->resolveNormalizedHostname($request);
+        $result = $this->manager->verify($hostname, false);
+        if (!$result->isValid() && $result->getStatus() === LicenseStatus::UNLICENSED) {
+            return;
+        }
+
+        // 5. Check if heartbeat is due by interval
+        $heartbeat = $this->manager->getHeartbeat();
+        if (!$heartbeat->shouldSendHeartbeat()) {
+            return;
+        }
+
+        // 6. Complete HTTP client response immediately where FastCGI is supported
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+
+        // 7. Acquire non-blocking concurrency lock to prevent duplicate concurrent heartbeats
+        $lock = $storage->acquireSyncLock(120);
+        if (!$lock) {
+            return;
+        }
+
+        // 8. Dispatch heartbeat check-in safely
+        try {
+            $heartbeat->send(true);
+        } catch (\Throwable $e) {
+            Log::warning('CodeLock automatic request-triggered heartbeat synchronization failed: ' . $e->getMessage());
+        } finally {
+            $storage->releaseSyncLock($lock);
+        }
     }
 }

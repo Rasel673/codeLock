@@ -442,6 +442,7 @@ HTML;
             request()->attributes->remove('_codelock_result');
         }
         $this->integrityMonitor->clearCache();
+        $this->storage->clearMemoryCache();
     }
 
     /**

@@ -50,6 +50,10 @@ class IntegrityMonitor
             'src/Support/LicenseKey.php',
             'src/IntegrityMonitor.php',
             'src/IntegrityResult.php',
+            'src/LicenseHeartbeat.php',
+            'src/LicenseClient.php',
+            'src/HeartbeatResult.php',
+            'src/Commands/HeartbeatCommand.php',
         ];
     }
 

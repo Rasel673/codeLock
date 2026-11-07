@@ -146,6 +146,10 @@ class CodeLockServiceProvider extends ServiceProvider
     protected function registerSchedule(): void
     {
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            if (!config('codelock.heartbeat_enabled', true)) {
+                return;
+            }
+
             // Prevent duplicate task registrations
             foreach ($schedule->events() as $event) {
                 if (is_string($event->command) && str_contains($event->command, 'codelock:heartbeat')) {

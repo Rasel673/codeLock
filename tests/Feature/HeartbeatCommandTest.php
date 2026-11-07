@@ -385,4 +385,23 @@ class HeartbeatCommandTest extends TestCase
         $this->assertSame('6b110bc7-a2f0-466d-8e42-706f97b5e40e', $serverSimulatedInstallation['id']);
         $this->assertSame('1.0.0', $serverSimulatedInstallation['client_package_version']);
     }
+
+    public function test_heartbeat_command_skips_when_concurrency_lock_is_active(): void
+    {
+        $cert = $this->createSignedCertificate([
+            'lic' => 'CLK-CONCURRENT-LOCK',
+            'dom' => ['localhost'],
+        ]);
+        $this->storage->saveCertificate($cert);
+
+        // Pre-acquire lock by another process
+        $heldLock = $this->storage->acquireSyncLock(120);
+        $this->assertNotFalse($heldLock);
+
+        $this->artisan('codelock:heartbeat', ['--force' => true])
+            ->expectsOutputToContain('Another heartbeat synchronization is currently in progress. Skipping.')
+            ->assertExitCode(0);
+
+        $this->storage->releaseSyncLock($heldLock);
+    }
 }

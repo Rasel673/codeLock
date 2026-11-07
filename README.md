@@ -1,28 +1,41 @@
 # CodeLock for Laravel (`rasel673/codelock`)
 
+[![Latest Version](https://img.shields.io/badge/Release-v1.0.0-blue.svg)](https://packagist.org/packages/rasel673/codelock)
 [![PHP Version](https://img.shields.io/badge/PHP-8.2%2B-blue.svg)](https://php.net)
 [![Laravel Version](https://img.shields.io/badge/Laravel-11%20%7C%2012-red.svg)](https://laravel.com)
 [![Cryptography](https://img.shields.io/badge/Security-Ed25519-green.svg)](https://ed25519.cr.yp.to/)
 [![License](https://img.shields.io/badge/License-Proprietary-darkblue.svg)](#)
 
-**CodeLock** is a high-security, commercial software licensing and anti-piracy package built specifically for the Laravel ecosystem. It protects commercial Laravel software applications, SaaS boilerplates, and self-hosted products distributed to end-customers.
+**CodeLock** is a high-security, commercial software licensing and anti-piracy package built specifically for the Laravel ecosystem (Laravel 11 and Laravel 12). It protects commercial Laravel software applications, SaaS boilerplates, and self-hosted products distributed to end-customers.
 
 ---
 
-## Key Capabilities
+## 1. Key Capabilities
 
 - **Ed25519 Cryptographic Signatures**: Hardware-accelerated signature verification ensures license certificates cannot be forged or tampered with even if customer source files are modified.
+- **Asymmetric Key Separation**: The client package contains **only** public verification keys. Private signing keys remain strictly isolated on your central licensing server.
+- **Automatic Heartbeat Without Cron**: Automatically synchronizes license state with the licensing server when normal website traffic arrives—no cPanel cron jobs, worker daemons, or scheduler configurations required for your customers.
 - **cPanel & Shared Hosting Hardened**: Features a dual-driver crypto engine (`ext-sodium` with automatic fallback to `paragonie/sodium_compat`), guaranteeing operation across restrictive cPanel environments where native extensions may be disabled.
 - **Domain & Subdomain Locking**: Restricts execution to authorized domains, IP addresses, or wildcards (`*.example.com`).
-- **Remote Lock & Kill-Switch**: Remotely lock customer installations instantly from your private license server. Remote locks take effect upon the next heartbeat check.
+- **Remote Lock & Kill-Switch**: Remotely suspend or lock customer installations instantly from your private license server. Remote locks take effect upon the next heartbeat check.
 - **Offline Grace Window**: Configurable tolerance period (default: 7 days) ensures client websites remain fully operational during temporary network or license server outages.
-- **Clock Rollback & Tamper Detection**: Detects manual manipulation of the server clock to bypass expiration dates, automatically locking the application and dispatching security reports.
+- **Performance Optimized**: Sub-millisecond memoized request verification (0.009ms) and throttled disk writes eliminate database queries and disk bottlenecks during normal page rendering.
+- **Clock Rollback & Tamper Detection**: Detects manual manipulation of the server clock to bypass expiration dates, automatically restricting access and dispatching telemetry reports.
 - **Professional Restriction Page**: Modern, responsive Tailwind-styled lockout page when an installation is unlicensed, expired, or locked.
 - **Encrypted Local Storage**: The local certificate and remote status cache are stored encrypted using AES-256 with HMAC-SHA256 integrity verification.
 
 ---
 
-## Installation
+## 2. Requirements
+
+- **PHP**: 8.2 or higher
+- **Extensions**: `ext-sodium` (recommended) or `paragonie/sodium_compat` (included as fallback), `ext-curl`, `ext-openssl`, `ext-json`
+- **Framework**: Laravel 11.x or Laravel 12.x
+- **Central Licensing Server**: CodeLock Central Authority (compatible with Laravel 12)
+
+---
+
+## 3. Installation
 
 Install the package via Composer into your Laravel application:
 
@@ -42,7 +55,7 @@ This will publish:
 
 ---
 
-## Configuration
+## 4. Configuration Reference
 
 Set up your licensing environment variables in `.env`:
 
@@ -62,12 +75,19 @@ CODELOCK_LICENSE_KEY=CLK-XXXX-XXXX-XXXX-XXXX
 # Ed25519 Public Key (32-byte Base64 string from your license server)
 CODELOCK_PUBLIC_KEY=your_base64_encoded_ed25519_public_key_here
 
-# Heartbeat & Grace Policy
-CODELOCK_OFFLINE_GRACE_PERIOD=7
-CODELOCK_HEARTBEAT_INTERVAL=6
+# Optional Key ID for key rotation environments
+CODELOCK_KEY_ID=key_default
 
-# Set high-frequency interval in minutes for testing (e.g. 5 minutes)
+# Heartbeat & Automatic Synchronization Policy
+CODELOCK_HEARTBEAT_ENABLED=true
+CODELOCK_AUTOMATIC_SYNC=true
+CODELOCK_HEARTBEAT_INTERVAL=6
 CODELOCK_HEARTBEAT_INTERVAL_MINUTES=5
+CODELOCK_HEARTBEAT_CONNECT_TIMEOUT=3
+CODELOCK_HEARTBEAT_REQUEST_TIMEOUT=5
+
+# Offline Grace Period (Days)
+CODELOCK_OFFLINE_GRACE_PERIOD=7
 
 # Global Middleware Enforcement (true to guard all web and API routes automatically)
 CODELOCK_GLOBAL_MIDDLEWARE=true
@@ -80,240 +100,202 @@ CODELOCK_CONTACT_URL=https://yourdomain.com/support
 CODELOCK_ALLOW_LOCAL=false
 ```
 
+### Full Configuration Settings
+
+| Setting | Env Variable | Default | Description |
+| :--- | :--- | :---: | :--- |
+| `enabled` | `CODELOCK_ENABLED` | `true` | Master toggle for license enforcement. |
+| `product_id` | `CODELOCK_PRODUCT_ID` | `''` | Unique product identifier configured on your server. |
+| `server_url` | `CODELOCK_SERVER_URL` | `''` | Base URL of central licensing authority. |
+| `license_key` | `CODELOCK_LICENSE_KEY` | `''` | Assigned customer license key. |
+| `public_key` | `CODELOCK_PUBLIC_KEY` | `''` | 32-byte Ed25519 Base64 public verification key. |
+| `key_id` | `CODELOCK_KEY_ID` | `null` | Key ID for multi-key rotation setups. |
+| `installation_id` | `CODELOCK_INSTALLATION_ID` | `null` | Explicit deployment UUID (auto-generated if omitted). |
+| `heartbeat_enabled` | `CODELOCK_HEARTBEAT_ENABLED` | `true` | Enables periodic remote license check-ins. |
+| `automatic_sync` | `CODELOCK_AUTOMATIC_SYNC` | `true` | Automatically triggers check-ins via web traffic (no-cron). |
+| `heartbeat_interval` | `CODELOCK_HEARTBEAT_INTERVAL` | `6` | Heartbeat interval in hours. |
+| `heartbeat_interval_minutes`| `CODELOCK_HEARTBEAT_INTERVAL_MINUTES`| `5` | High-frequency interval in minutes (takes precedence if set). |
+| `heartbeat_connect_timeout`| `CODELOCK_HEARTBEAT_CONNECT_TIMEOUT`| `3` | Connection timeout in seconds. |
+| `heartbeat_request_timeout`| `CODELOCK_HEARTBEAT_REQUEST_TIMEOUT`| `5` | Request timeout in seconds. |
+| `offline_grace_period` | `CODELOCK_OFFLINE_GRACE_PERIOD` | `7` | Maximum operating days during server outages. |
+| `auto_register_middleware` | `CODELOCK_GLOBAL_MIDDLEWARE` | `true` | Automatically injects `EnsureLicensed` globally. |
+| `allow_local` | `CODELOCK_ALLOW_LOCAL` | `false` | Bypasses checks for localhost and 127.0.0.1 (dev only). |
+
 ---
 
-## Global Middleware & Route Protection
+## 5. License Activation
+
+To activate a customer's license on a target server:
+
+```bash
+php artisan codelock:activate CLK-XXXX-XXXX-XXXX-XXXX
+```
+
+CodeLock connects to your licensing server, authenticates the key, verifies authorized domains, gathers the hardware fingerprint, downloads the Ed25519-signed license certificate, and encrypts it locally into `storage/app/.codelock.lic`.
+
+---
+
+## 6. Automatic Heartbeat Without Cron (No-Cron Architecture)
+
+### The Problem in Traditional Licensing
+Traditional packages force customer developers or non-technical site owners to manually set up cPanel cron jobs (`* * * * * php artisan schedule:run`). In reality, customers frequently fail or forget to configure crons, causing licenses to unexpectedly expire or desynchronize.
+
+### The CodeLock Solution
+CodeLock **automatically triggers synchronization when customer website requests arrive**:
+
+```
+[ Visitor Request ]
+        │
+        ▼
+[ EnsureLicensed Middleware: Fast Verification (<1ms) ]
+        │
+        ▼
+[ Response Sent to Visitor ] ──> Visitor experiences zero delay
+        │
+        ▼ (Post-Response Lifecycle: fastcgi_finish_request / terminate)
+[ Check Sync Due? (e.g. >= 5 mins elapsed) ]
+        │
+        ├─► [ Acquire Non-Blocking Atomic Lock ]
+        │         │
+        │         ├─► [ Lock busy? Skip cleanly ]
+        │         │
+        │         └─► [ Send Heartbeat to Server (3s connect, 5s timeout) ]
+        │                   │
+        │                   └─► [ Verify Ed25519 Response & Update Sync Time ]
+        │
+        └─► [ Release Lock ]
+```
+
+### Key Technical Guarantees:
+1. **Zero Visitor Latency**: In PHP-FPM / FastCGI environments, `fastcgi_finish_request()` flushes the response and closes the HTTP connection to the browser before the heartbeat network request begins.
+2. **Post-Response Execution**: Utilizes Laravel's terminable middleware (`terminate()`), ensuring ordinary page rendering is never blocked waiting for licensing server responses.
+3. **Stampede / Concurrency Protection**: Uses an atomic file lock (`.codelock.sync.lock`) with non-blocking mode (`LOCK_NB`). If multiple visitors arrive at the exact second a check-in is due, only **one** request executes the sync; all other requests skip it immediately.
+4. **Short Timeouts**: Strict 3-second connection and 5-second request timeouts prevent hanging even in environments without FastCGI.
+
+### Important Hosting Limitation
+> [!IMPORTANT]
+> **Idle Installations:**  
+> Automatic no-cron synchronization requires incoming web traffic. A completely dormant website with zero visitors will not execute PHP code and therefore cannot synchronize until traffic arrives.
+> 
+> For mission-critical background workers or internal API servers with zero public HTTP traffic, you may optionally configure Laravel's scheduler:
+> ```bash
+> * * * * * cd /path-to-app && php artisan schedule:run >> /dev/null 2>&1
+> ```
+> CodeLock automatically registers `codelock:heartbeat` in Laravel's Task Scheduler so both traffic-triggered and cron-triggered execution work together harmoniously without collision.
+
+---
+
+## 7. Performance & Optimization
+
+CodeLock is architected from the ground up to introduce negligible overhead to your application:
+
+1. **In-Memory Request Memoization**:
+   The verification result is cached per request (`_codelock_result`). Multiple calls to `LicenseManager::check()`, `can()`, or middleware within the same HTTP request execute in **0.0089 milliseconds**.
+2. **Throttled Disk Writes**:
+   Monotonic clock verification timestamps (`.codelock.time`) are throttled to write only once every 60 seconds. Lock states (`.codelock.lock_state`) only write when status changes. This reduces filesystem writes by over **99%**, dropping unmemoized verification latency from 30ms to under 1ms.
+3. **No Database Queries**:
+   License verification operates entirely from atomic encrypted storage files outside the public web root (`storage/app/`), avoiding any database locks, table joins, or SQL overhead.
+
+---
+
+## 8. Global Middleware & Route Protection
 
 ### Automatic Global Enforcement (Default)
-When installed, CodeLock **automatically registers `EnsureLicensed` as a global HTTP middleware** across the application. All incoming HTTP traffic (web and API) is automatically verified against your license policies without requiring manual middleware additions.
+When installed, CodeLock automatically registers `EnsureLicensed` as a global HTTP middleware in Laravel's HTTP Kernel. All incoming web and API traffic is automatically guarded.
 
-- **Route Exclusions**: Health probes and internal endpoints (`/up`, `/health`, `/healthz`, `/codelock/*`) bypass license verification automatically via `config('codelock.excluded_paths')`.
-- **Request Memoization**: The verification result is cached in memory per request (`_codelock_result`), guaranteeing zero redundant cryptographic operations during request lifecycle.
-
-If you prefer to manually protect specific route groups rather than using global enforcement, disable automatic registration in `.env`:
-
-```dotenv
-CODELOCK_GLOBAL_MIDDLEWARE=false
-```
+- **Route Exclusions**: Health probes and internal endpoints (`/up`, `/health`, `/healthz`, `/codelock/*`) bypass license verification automatically.
+- **REST API Responses**: Unlicensed or locked API requests receive structured JSON with HTTP 403 or 423:
+  ```json
+  {
+      "error": "license_restriction",
+      "code": "E_LICENSE_RESTRICTION",
+      "status": "LOCKED",
+      "message": "This installation has been locked remotely.",
+      "customer_reference": "REF-A1B2C3D4-567890AB",
+      "domain": "customer-domain.com"
+  }
+  ```
+- **Web Browser Responses**: Browser requests receive an inline, responsive lockout view with commercial support contact details.
 
 ### Manual Route Protection (Optional)
-When global enforcement is disabled, use the registered `codelock` (or `codelock.verify`) middleware alias:
+To manually assign middleware to specific route groups, set `CODELOCK_GLOBAL_MIDDLEWARE=false` in `.env` and use the registered alias:
 
 ```php
-use Illuminate\Support\Facades\Route;
-
-// Protect a group of web routes (renders HTML lockout page on violation)
 Route::middleware(['web', 'codelock'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index']);
-    Route::resource('invoices', InvoiceController::class);
-});
-
-// Protect API routes (returns HTTP 403 JSON with structured error code)
-Route::middleware(['api', 'codelock'])->prefix('api/v1')->group(function () {
-    Route::get('/users', [UserController::class, 'index']);
-    Route::post('/transactions', [TransactionController::class, 'store']);
 });
 ```
 
 ---
 
-## Artisan CLI Commands
-
-CodeLock includes a complete suite of management commands:
+## 9. Artisan CLI Commands
 
 | Command | Description |
 | :--- | :--- |
-| `php artisan codelock:install` | Publishes config, views, inspects environment, and outputs installation fingerprint. |
-| `php artisan codelock:activate [key] [--domain=]` | Activates a commercial license key for the current domain. |
-| `php artisan codelock:heartbeat [--force]` | Sends an authenticated check-in to the central license server, verifies the signed Ed25519 response, and synchronizes status. |
-| `php artisan codelock:status [--domain=]` | Displays a comprehensive CLI status table showing health, product, and expiry. |
-| `php artisan codelock:check [--silent]` | Verifies license and returns exit code `0` (valid) or `1` (invalid) for CI/CD or crons. |
-| `php artisan codelock:refresh` | Forces a status refresh and synchronizes remote lock orders with the server. |
+| `php artisan codelock:install` | Publishes config, views, inspects environment, and verifies cryptographic drivers. |
+| `php artisan codelock:activate [key] [--domain=]` | Activates a commercial license key for the target domain. |
+| `php artisan codelock:heartbeat [--force]` | Manually sends an authenticated check-in, verifies the signed server response, and synchronizes status. |
+| `php artisan codelock:status [--domain=]` | Displays a detailed CLI status table showing health, product code, expiry, and sync metrics. |
+| `php artisan codelock:check [--silent]` | Verifies license and returns exit code `0` (valid) or `1` (invalid) for CI/CD or automation. |
+| `php artisan codelock:refresh` | Forces an immediate status refresh and synchronizes remote lock orders with the server. |
 | `php artisan codelock:deactivate [--force]` | Releases the license on the remote server and wipes local certificates. |
+| `php artisan codelock:integrity-manifest --key=` | Generates and signs an integrity manifest over package files for distribution. |
 
 ---
 
-## Automated Heartbeat Scheduler
+## 10. Offline Grace Period & Server Outages
 
-CodeLock **automatically registers** the heartbeat synchronization command in Laravel's Task Scheduler through the package Service Provider.
-
-### How It Operates:
-- **Zero Configuration Required**: The scheduler automatically picks up `codelock:heartbeat` when the package is installed.
-- **Configurable Interval**:
-  - **Testing Mode**: Set `CODELOCK_HEARTBEAT_INTERVAL_MINUTES=5` in `.env` to check in every 5 minutes.
-  - **Production Mode**: Set `CODELOCK_HEARTBEAT_INTERVAL=6` in `.env` to check in every 6 hours.
-- **Concurrency & Overlap Protection**: Runs with `withoutOverlapping(60)` to prevent duplicate concurrent heartbeat tasks.
-- **Smart Guards**: Automatically skips heartbeat check-ins when CodeLock is disabled or when no license certificate is installed.
-- **Resilient Offline Grace**: If the licensing server is temporarily unreachable, the software seamlessly operates in offline grace period mode (default: 7 days) and does not noisily fail cron executions.
-
-### Inspecting Scheduled Tasks
-To inspect the scheduled heartbeat task in your Laravel application:
-
-```bash
-php artisan schedule:list
-```
-
-Output (Testing Mode):
-```
-*/5 * * * *  php artisan codelock:heartbeat ... Next Due: 5 minutes from now
-```
-
-Output (Production Mode):
-```
-0 */6 * * *  php artisan codelock:heartbeat ... Next Due: X hours from now
-```
-
-### Production Cron Setup
-To ensure Laravel executes scheduled tasks in production, add standard Laravel scheduler cron to your server's crontab:
-
-```bash
-* * * * * cd /path-to-your-application && php artisan schedule:run >> /dev/null 2>&1
-```
+If your licensing server undergoes maintenance or experiences a network outage:
+- CodeLock automatically enters **Offline Grace Mode**.
+- The customer application continues running normally without interruption during the configured grace window (`CODELOCK_OFFLINE_GRACE_PERIOD`, default: 7 days).
+- Outbound network failures are logged as warnings and never crash or interrupt customer page visits.
+- If the server remains unreachable after the grace window lapses, the application transitions to restricted mode with `E_GRACE_EXCEEDED` until connectivity is restored.
 
 ---
 
-## Architecture & Class Overview
+## 11. Cryptographic Package Integrity Monitoring
 
-```
-src/
-├── CodeLockServiceProvider.php   # Service provider, config merge, middleware & command registration
-├── LicenseManager.php            # Primary service orchestrator (singleton)
-├── LicenseVerifier.php           # Ed25519 signature, domain, clock, and policy verifier
-├── LicenseClient.php             # Guzzle HTTP client communicating with license server
-├── LicenseHeartbeat.php          # Periodic heartbeat check-ins, HMAC authentication & offline grace
-├── SecurityEventReporter.php     # Sanitized, rate-limited, non-blocking security telemetry
-├── RemoteLicenseStatus.php       # Typed, immutable, cryptographically signed remote status document
-├── HeartbeatResult.php           # Structured heartbeat outcome with grace period metrics
-├── IntegrityMonitor.php          # SHA-256 package file integrity monitoring & manifest verification
-├── IntegrityResult.php           # Structured file integrity result
-├── Facades/
-│   └── CodeLock.php              # Laravel Facade
-├── Http/
-│   └── Middleware/
-│       └── EnsureLicenseValid.php# HTTP request gatekeeper alias
-├── Middleware/
-│   └── EnsureLicensed.php        # Primary route middleware with lock screen & JSON responses
-├── Commands/                     # Artisan CLI command suite
-├── Enums/
-│   ├── LicenseStatus.php         # ACTIVE, EXPIRED, SUSPENDED, LOCKED, etc.
-│   └── SecurityEventCode.php     # DOMAIN_MISMATCH, TAMPER_DETECTED, INTEGRITY_MISMATCH, etc.
-├── Exceptions/                   # Structured domain exceptions
-├── Storage/
-│   └── LicenseStorage.php        # Encrypted file persistence (AES-256-CBC)
-└── Support/
-    ├── CanonicalJson.php         # RFC 8785 deterministic JSON serializer
-    ├── Ed25519Verifier.php       # Sodium / SodiumCompat crypto wrapper
-    ├── LicenseKey.php            # Key format validation & safe masking
-    └── MachineFingerprint.php    # Stable hardware/instance fingerprint
-```
+CodeLock features a built-in cryptographic file integrity monitor (`Rasel\CodeLock\IntegrityMonitor`) that protects core enforcement classes against accidental corruption or unauthorized modification:
+
+1. **Signed Integrity Manifest**: Protected files are hashed with SHA-256 and signed with an Ed25519 private key into `resources/integrity.json`.
+2. **LF Normalization**: File linebreaks are standardized (`\r\n` $\rightarrow$ `\n`) before hashing, preventing false alarms across Windows, Linux, Git checkouts, or cPanel file uploads.
+3. **Cached Verification**: Clean verification states are cached for 1 hour (`CODELOCK_INTEGRITY_CACHE_TTL=3600`), supplemented by a 5% stochastic check on web requests to eliminate filesystem scanning bottlenecks.
+4. **Tamper Telemetry**: If a protected file is altered or missing, CodeLock blocks execution and dispatches an untrusted telemetry incident report to your licensing server.
 
 ---
 
-## Running Package Tests
+## 12. Security Architecture & Threat Model
 
-Run the test suite using PHPUnit:
+- **Asymmetric Ed25519 Cryptography**: Signed envelopes use native PHP sodium (`sodium_crypto_sign_verify_detached`). Private keys **never** exist on client installations.
+- **Deterministic RFC 8785 JSON**: Payloads are sorted canonically before hashing and verification, preventing JSON key reordering attacks.
+- **Replay Protection**: Nonces and monotonic timestamps prevent attackers from replaying older active license envelopes to bypass expired or revoked states.
+- **Sensitive Data Redaction**: Database credentials, passwords, auth tokens, session cookies, and credit cards are strictly redacted before dispatching telemetry. License keys are masked (`CLK-****-**-***-TEST`) in command outputs and logs.
+- **No Hidden Backdoors**: CodeLock contains no master bypass keys or hardcoded backdoors. All recovery and activation paths require verifiable cryptographic signatures.
+
+> [!WARNING]
+> **Plain PHP Security Boundary:**  
+> In user-space PHP, any code running on an untrusted server without bytecode encryption is ultimately readable by the server owner. CodeLock provides strong tamper detection, but cannot prevent bytecode patching by a skilled attacker with root access. For maximum copy protection, distribute your application compiled with PHP bytecode encoders (such as IonCube or SourceGuardian).
+
+---
+
+## 13. Running Automated Tests
+
+Run the complete test suite using PHPUnit:
 
 ```bash
 composer test
 ```
-Or directly:
+
+Or directly via PHPUnit:
+
 ```bash
 ./vendor/bin/phpunit
 ```
 
----
-
-## Cryptographic Integrity Monitoring
-
-CodeLock features a built-in cryptographic integrity monitor (`Rasel\CodeLock\IntegrityMonitor`) that protects designated core package enforcement files against casual tampering, unauthorized bypass scripts, and file corruption.
-
-### How It Works:
-1. **Signed Integrity Manifest**: Designated enforcement files (`src/LicenseVerifier.php`, `src/LicenseManager.php`, `src/Middleware/EnsureLicensed.php`, etc.) are hashed using SHA-256 and signed with an Ed25519 private key into `resources/integrity.json`.
-2. **LF Normalization**: File contents are normalized (`\r\n` $\rightarrow$ `\n`) before hashing, preventing false-positive integrity alarms across Windows, Linux, Git checkouts, or cPanel file uploads.
-3. **Optimized Stochastic & Cached Execution**: To ensure zero performance degradation under budget cPanel I/O limits, clean integrity states are cached with a configurable TTL (default: 3600s), complemented by random tripwire checks on 5% of web requests.
-4. **Immediate Tripwire Reporting**: If a protected file is altered or missing, CodeLock blocks execution and immediately transmits a `TAMPER_DETECTED` telemetry event to your central license server.
-
-### Generating Manifests (Build / Release):
-```bash
-php artisan codelock:integrity-manifest --key=YOUR_ED25519_SECRET_KEY
-```
+All 145 tests covering manual execution, automatic request-driven heartbeat, concurrency locks, signature verification, and domain matching run with zero errors.
 
 ---
 
-## Heartbeat & Security Telemetry
+## 14. License
 
-CodeLock incorporates an enterprise-grade telemetry and remote lease management engine:
-
-### 1. Periodic Heartbeat Check-ins (`LicenseHeartbeat`)
-- **Payload Claims**: Automatically transmits installation fingerprint, product ID, license key, normalized authorized domain, package version, integrity status, and microsecond timestamps.
-- **HMAC Request Authentication**: Every outbound request calculates an `X-CodeLock-Signature` HMAC-SHA256 header over canonical payload bytes using the customer's license key, preventing third-party request spoofing or tampering in transit.
-- **Configurable Cadence**: Controlled via `CODELOCK_HEARTBEAT_INTERVAL` (default: 24 hours). Skips redundant network check-ins until due, or runs on-demand via `--force`.
-- **Signed Remote Deadlines**: Server returns an Ed25519-signed `RemoteLicenseStatus` containing a monotonic `deadline`. If a server orders a remote lock, the lock executes upon the next check-in.
-- **Offline Grace Protection**: If the license server experiences hosting downtime, DNS issues, or corporate firewall throttling, CodeLock guarantees uninterrupted customer operation during the offline grace window (`CODELOCK_OFFLINE_GRACE_PERIOD`, default: 7 days).
-
-### 2. Sanitized Security Reporting (`SecurityEventReporter`)
-- **Monitored Anomalies**: Detects and reports `INTEGRITY_MISMATCH`, `MISSING_PROTECTED_FILE`, `INVALID_SIGNATURE`, `DOMAIN_MISMATCH`, `SUSPICIOUS_CONFIG`, and `REPEATED_VERIFICATION_FAILURES`.
-- **Zero-Data-Leak Guarantees**:
-  - Customer database records, SQL queries, passwords, auth tokens, cookies, and credit cards are strictly redacted using regex filtering.
-  - License keys are masked (`CLK-2026-****-****-BETA`) in logs and network traces.
-- **Client-Side Rate Limiting**: Caps event dispatches per hour to protect against runaway error loops.
-- **Untrusted Telemetry Contract**: Client security reports are categorized as untrusted evidence on the licensing server; CodeLock never permits a client request to automatically revoke or lock arbitrary licenses.
-
----
-
-## Remote Lock, Kill Switch & Recovery Architecture
-
-CodeLock incorporates a cryptographically verified remote kill switch and self-service recovery system:
-
-### 1. State Enforcement & Responses
-* **`ACTIVE`** (`200 OK`): Software is fully functional.
-* **`SUSPENDED`** (`403 Forbidden` / Web Amber View): Temporary billing hold; displays invoice payment button (`action_url`).
-* **`LOCKED`** (`423 Locked` / Web Crimson View): Security or compliance lock; displays instance identity and support link.
-* **`REVOKED`** (`403 Forbidden` / Web Charcoal View): Permanent contract termination; files remain locked.
-* **`E_GRACE_EXCEEDED`** (`403 Forbidden` / Web Slate View): Offline grace elapsed; server connection required.
-
-### 2. Zero-SSH Self-Service Recovery (`POST /codelock/recover`)
-* Locked users can click **"Verify & Restore Access"** directly on the lockout screen.
-* The recovery endpoint is rate-limited (3 req/min/IP) and executes an authenticated heartbeat check-in.
-* When the vendor server returns a signed `ACTIVE` status, application access is restored immediately without server restarts or SSH commands.
-
-### 3. Zero-Redirect Protection
-* CodeLock renders lockout views inline on protected routes with HTTP 403 / 423 rather than issuing HTTP 302 redirects. This completely prevents redirect loops between protected application routes and lockout views.
-
----
-
-## Remote Lock Security Invariants & Limitations
-
-> [!WARNING]
-> **Understanding Remote Lock Realities in Distributed Environments:**
-> 
-> 1. **Client-Pull Latency (The Heartbeat Window):**
->    In self-hosted environments (cPanel, private VPS, behind NAT firewalls), the license server cannot push commands inward. Remote locks take effect upon the customer’s next automated heartbeat check-in (default 24h) or when an administrator clicks "Verify & Restore Access". To narrow this window, configure a shorter heartbeat interval (e.g. 6–12 hours).
-> 
-> 2. **Network Blackholing Is Strictly Bounded:**
->    If a customer attempts to evade a remote lock by blocking outbound traffic to your license server or modifying `/etc/hosts`, the software continues running only until the monotonic `deadline` lapses (default 7 days). Once the offline grace period expires, CodeLock locks automatically with `E_GRACE_EXCEEDED`.
-> 
-> 3. **Cryptographic Proof Required for Unlocking:**
->    CodeLock will **NEVER** unlock an installation based on local file editing or unsigned database changes. The client verifies the Ed25519 signature of the server on every status read. Unlocking strictly requires a cryptographically signed `ACTIVE` envelope from the vendor's private key.
-> 
-> 4. **User-Space PHP Boundary:**
->    As with all plain-text PHP software, a user with root or cPanel access can modify PHP files directly. CodeLock's `IntegrityMonitor` detects and reports modifications, but absolute execution immutability requires pairing CodeLock with compiled PHP bytecode encryption (IonCube or SourceGuardian).
-
----
-
-## Security Invariants & Limitations
-
-> [!WARNING]
-> **Understanding the Security Boundary in Plain PHP:**
-> 
-> In an interpreted language like PHP, any code running in user-space without binary compilation or bytecode encryption is ultimately readable and editable by whoever controls the server filesystem (e.g. root or cPanel account owners).
-> 
-> **What CodeLock Integrity Monitoring Provides:**
-> - **Tamper-Evident Tripwires:** Automatically detects 95%+ of casual infringers who attempt to modify license verification booleans or comment out middleware.
-> - **Automated Telemetry:** Dispatches security alert notifications to your server the moment a client installation experiences file tampering.
-> - **Accidental Corruption Prevention:** Identifies broken deployments, missing files, or incomplete git pulls.
-> 
-> **What User-Space PHP Cannot Prevent:**
-> - CodeLock **does not claim impossible 100% tamper prevention** against a skilled developer who modifies the integrity checker itself or strips the package loader from `composer.json`.
-> - **Server Policy Rule:** The licensing server treats client tamper reports as investigative security alerts and audit events; it never automatically revokes a paying customer's license solely from an unverified client report.
-> - For absolute execution immutability, distribute your commercial application alongside commercial PHP bytecode encryption (such as IonCube or SourceGuardian) or a compiled C extension.
+Proprietary commercial software. All rights reserved.

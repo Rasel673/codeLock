@@ -10,7 +10,12 @@ class LicenseStorage
     protected string $statusPath;
     protected string $timePath;
     protected string $syncPath;
+    protected string $syncLockPath;
     protected string $lockStatePath;
+
+    protected ?int $cachedLastVerified = null;
+    protected ?array $cachedLockState = null;
+    protected ?int $cachedLastSync = null;
 
     public function __construct(?string $storagePath = null, ?string $statusPath = null)
     {
@@ -19,6 +24,7 @@ class LicenseStorage
         $storageDir = dirname($this->storagePath);
         $this->timePath = $storageDir . '/.codelock.time';
         $this->syncPath = $storageDir . '/.codelock.sync';
+        $this->syncLockPath = $storageDir . '/.codelock.sync.lock';
         $this->lockStatePath = $storageDir . '/.codelock.lock_state';
 
         // Assert storage paths are kept strictly outside public directory
@@ -78,6 +84,7 @@ class LicenseStorage
      */
     public function deleteCertificate(): bool
     {
+        $this->clearMemoryCache();
         $deleted = true;
         if (file_exists($this->storagePath)) {
             $deleted = @unlink($this->storagePath);
@@ -88,6 +95,9 @@ class LicenseStorage
         }
         if (file_exists($this->lockStatePath)) {
             @unlink($this->lockStatePath);
+        }
+        if (file_exists($this->syncLockPath)) {
+            @unlink($this->syncLockPath);
         }
         return $deleted;
     }
@@ -140,11 +150,17 @@ class LicenseStorage
 
     /**
      * Record monotonic verification timestamp atomically to detect clock rollbacks.
+     * Skips writing if the timestamp hasn't advanced by at least 60 seconds.
      */
-    public function recordVerificationTimestamp(int $timestamp): void
+    public function recordVerificationTimestamp(int $timestamp, bool $force = false): void
     {
+        if (!$force && $this->cachedLastVerified !== null && ($timestamp - $this->cachedLastVerified) < 60 && $timestamp >= $this->cachedLastVerified) {
+            return;
+        }
+
         $encrypted = $this->encrypt((string) $timestamp);
         $this->atomicWrite($this->timePath, $encrypted, 0600);
+        $this->cachedLastVerified = $timestamp;
     }
 
     /**
@@ -152,17 +168,24 @@ class LicenseStorage
      */
     public function getLastVerificationTimestamp(): int
     {
+        if ($this->cachedLastVerified !== null) {
+            return $this->cachedLastVerified;
+        }
+
         if (!file_exists($this->timePath)) {
+            $this->cachedLastVerified = 0;
             return 0;
         }
 
         $raw = @file_get_contents($this->timePath);
         if ($raw === false || empty($raw)) {
+            $this->cachedLastVerified = 0;
             return 0;
         }
 
         $decrypted = $this->decrypt($raw);
-        return $decrypted !== null ? (int) $decrypted : 0;
+        $this->cachedLastVerified = $decrypted !== null ? (int) $decrypted : 0;
+        return $this->cachedLastVerified;
     }
 
     /**
@@ -172,6 +195,7 @@ class LicenseStorage
     {
         $encrypted = $this->encrypt((string) $timestamp);
         $this->atomicWrite($this->syncPath, $encrypted, 0600);
+        $this->cachedLastSync = $timestamp;
     }
 
     /**
@@ -179,6 +203,10 @@ class LicenseStorage
      */
     public function getLastSyncTimestamp(): int
     {
+        if ($this->cachedLastSync !== null) {
+            return $this->cachedLastSync;
+        }
+
         if (!file_exists($this->syncPath)) {
             return 0;
         }
@@ -189,14 +217,80 @@ class LicenseStorage
         }
 
         $decrypted = $this->decrypt($raw);
-        return $decrypted !== null ? (int) $decrypted : 0;
+        $this->cachedLastSync = $decrypted !== null ? (int) $decrypted : 0;
+        return $this->cachedLastSync;
+    }
+
+    /**
+     * Acquire an atomic non-blocking sync lock to prevent concurrent heartbeat dispatches.
+     *
+     * @param int $ttlSeconds Maximum lifespan of the lock in seconds
+     * @return mixed File lock resource if acquired, false otherwise
+     */
+    public function acquireSyncLock(int $ttlSeconds = 120): mixed
+    {
+        $dir = dirname($this->syncLockPath);
+        $this->ensureDirectoryExists($dir);
+
+        $fp = @fopen($this->syncLockPath, 'c+');
+        if (!$fp) {
+            return false;
+        }
+
+        if (!flock($fp, LOCK_EX | LOCK_NB)) {
+            fclose($fp);
+            return false;
+        }
+
+        // Check if existing content indicates an active lock within TTL
+        $content = stream_get_contents($fp);
+        $now = time();
+        if (!empty($content)) {
+            $lockedAt = (int) $content;
+            if ($lockedAt > 0 && ($now - $lockedAt) < $ttlSeconds) {
+                // flock already guarantees mutual exclusion, but keep timestamp for tracking
+            }
+        }
+
+        ftruncate($fp, 0);
+        rewind($fp);
+        fwrite($fp, (string) $now);
+        fflush($fp);
+
+        return $fp;
+    }
+
+    /**
+     * Release atomic sync lock.
+     *
+     * @param mixed $lockHandle
+     */
+    public function releaseSyncLock(mixed $lockHandle): void
+    {
+        if (is_resource($lockHandle)) {
+            flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
+        }
     }
 
     /**
      * Record local lock state and timestamp securely.
+     * Skips writing if state and reason have not changed.
      */
-    public function recordLockState(string $status, ?string $reason = null, ?int $timestamp = null): void
+    public function recordLockState(string $status, ?string $reason = null, ?int $timestamp = null, bool $force = false): void
     {
+        if (!$force && $this->cachedLockState !== null) {
+            if (($this->cachedLockState['status'] ?? null) === $status && ($this->cachedLockState['reason'] ?? null) === $reason) {
+                return;
+            }
+        } elseif (!$force && file_exists($this->lockStatePath)) {
+            $current = $this->getLastLockState();
+            if ($current !== null && ($current['status'] ?? null) === $status && ($current['reason'] ?? null) === $reason) {
+                $this->cachedLockState = $current;
+                return;
+            }
+        }
+
         $data = [
             'status' => $status,
             'reason' => $reason,
@@ -205,6 +299,7 @@ class LicenseStorage
         $json = json_encode($data, JSON_UNESCAPED_SLASHES);
         $encrypted = $this->encrypt($json);
         $this->atomicWrite($this->lockStatePath, $encrypted, 0600);
+        $this->cachedLockState = $data;
     }
 
     /**
@@ -212,6 +307,10 @@ class LicenseStorage
      */
     public function getLastLockState(): ?array
     {
+        if ($this->cachedLockState !== null) {
+            return $this->cachedLockState;
+        }
+
         if (!file_exists($this->lockStatePath)) {
             return null;
         }
@@ -224,11 +323,23 @@ class LicenseStorage
         $decrypted = $this->decrypt($raw);
         if ($decrypted === null) {
             $decoded = json_decode($raw, true);
-            return is_array($decoded) ? $decoded : null;
+            $this->cachedLockState = is_array($decoded) ? $decoded : null;
+            return $this->cachedLockState;
         }
 
         $decoded = json_decode($decrypted, true);
-        return is_array($decoded) ? $decoded : null;
+        $this->cachedLockState = is_array($decoded) ? $decoded : null;
+        return $this->cachedLockState;
+    }
+
+    /**
+     * Clear memoized memory caches (useful for test resets).
+     */
+    public function clearMemoryCache(): void
+    {
+        $this->cachedLastVerified = null;
+        $this->cachedLockState = null;
+        $this->cachedLastSync = null;
     }
 
     /**

@@ -32,7 +32,18 @@ return [
     | The full base URL of your private CodeLock license server.
     |
     */
-    'license_server_url' => env('CODELOCK_SERVER_URL', 'https://license.yourdomain.com'),
+    'server_url' => env('CODELOCK_SERVER_URL', env('CODELOCK_LICENSE_SERVER_URL', 'https://license.landingbd.top')),
+    'license_server_url' => env('CODELOCK_SERVER_URL', env('CODELOCK_LICENSE_SERVER_URL', 'https://license.landingbd.top')),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Key Identifier (kid)
+    |--------------------------------------------------------------------------
+    |
+    | Optional key identifier for multi-key rotation environments.
+    |
+    */
+    'key_id' => env('CODELOCK_KEY_ID', null),
 
     /*
     |--------------------------------------------------------------------------
@@ -80,17 +91,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Heartbeat Interval
+    | Heartbeat & Automatic Synchronization Policy
     |--------------------------------------------------------------------------
     |
-    | How often the client application should check in with the central
-    | server to synchronize license state and remote lock policies.
-    | Set heartbeat_interval (hours, default 6) or heartbeat_interval_minutes
-    | (default 5 for testing).
+    | heartbeat_enabled: Master switch for heartbeat synchronization.
+    | automatic_sync: Automatically trigger synchronization on customer traffic
+    |                 without requiring cron or scheduler workers.
+    | heartbeat_interval: Interval in hours (or minutes via heartbeat_interval_minutes).
     |
     */
+    'heartbeat_enabled' => env('CODELOCK_HEARTBEAT_ENABLED', true),
+    'automatic_sync' => env('CODELOCK_AUTOMATIC_SYNC', true),
     'heartbeat_interval' => (int) env('CODELOCK_HEARTBEAT_INTERVAL', 6),
     'heartbeat_interval_minutes' => (int) env('CODELOCK_HEARTBEAT_INTERVAL_MINUTES', 5),
+    'heartbeat_connect_timeout' => (int) env('CODELOCK_HEARTBEAT_CONNECT_TIMEOUT', 3),
+    'heartbeat_request_timeout' => (int) env('CODELOCK_HEARTBEAT_REQUEST_TIMEOUT', 5),
 
     /*
     |--------------------------------------------------------------------------
@@ -112,8 +127,8 @@ return [
     | installation is locked, expired, or pending administrative approval.
     |
     */
-    'contact_email' => env('CODELOCK_CONTACT_EMAIL', 'support@yourdomain.com'),
-    'contact_url' => env('CODELOCK_CONTACT_URL', 'https://yourdomain.com/support'),
+    'contact_email' => env('CODELOCK_CONTACT_EMAIL', 'info@sarkarit.com'),
+    'contact_url' => env('CODELOCK_CONTACT_URL', 'https://www.sarkarit.com'),
 
     /*
     |--------------------------------------------------------------------------
