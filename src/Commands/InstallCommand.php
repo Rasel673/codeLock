@@ -3,6 +3,7 @@
 namespace Rasel\CodeLock\Commands;
 
 use Illuminate\Console\Command;
+use Rasel\CodeLock\Support\JsGuardBuilder;
 use Rasel\CodeLock\Support\MachineFingerprint;
 
 class InstallCommand extends Command
@@ -27,6 +28,12 @@ class InstallCommand extends Command
             '--tag' => 'codelock-views',
             '--force' => $this->option('force'),
         ]);
+
+        // 2b. Publish Persistent Encrypted JS Guard Asset (survives composer package removal)
+        $jsGuardPath = null;
+        if (config('codelock.js_guard.enabled', true)) {
+            $jsGuardPath = (new JsGuardBuilder())->writeToPublicPath();
+        }
 
         // 3. System Environment Inspection
         $this->newLine();
@@ -62,6 +69,14 @@ class InstallCommand extends Command
             $this->line("Automatic Heartbeat Synchronization: <info>Active (Traffic-Triggered, No-Cron every {$intervalDisplay})</info>");
         } else {
             $this->line('Automatic Heartbeat Synchronization: <comment>Disabled</comment>');
+        }
+
+        if ($jsGuardPath !== null) {
+            $jsMins = max(1, (int) config('codelock.js_guard.interval_minutes', 5));
+            $assetRel = ltrim((string) config('codelock.js_guard.asset_path', 'vendor/codelock/codelock-guard.js'), '/');
+            $this->line("Browser JS Guard Asset: <info>Published ({$jsGuardPath})</info>");
+            $this->line("Browser Background Sync: <info>Active (Every {$jsMins} Minutes, persists across package removal)</info>");
+            $this->line('Persistent Layout Tag (optional for post-removal execution): <comment><script src="/' . $assetRel . '" defer></script></comment>');
         }
 
         $this->info('CodeLock package installed successfully.');

@@ -207,5 +207,23 @@ return [
         'stochastic_rate' => (int) env('CODELOCK_INTEGRITY_STOCHASTIC_RATE', 5),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Browser JavaScript Guard & 5-Minute Background Sync
+    |--------------------------------------------------------------------------
+    |
+    | Publishes an encoded/obfuscated browser script to public/vendor/codelock/codelock-guard.js
+    | that performs silent background synchronization every 5 minutes (coordinated
+    | across tabs via localStorage). Never embeds license keys or secrets.
+    |
+    */
+    'js_guard' => [
+        'enabled' => env('CODELOCK_JS_GUARD_ENABLED', true),
+        'auto_inject' => env('CODELOCK_JS_AUTO_INJECT', true),
+        'interval_minutes' => (int) env('CODELOCK_JS_SYNC_INTERVAL_MINUTES', 5),
+        'asset_path' => 'vendor/codelock/codelock-guard.js',
+        'fallback_server_check' => env('CODELOCK_JS_FALLBACK_SERVER_CHECK', true),
+    ],
+
 ];
 

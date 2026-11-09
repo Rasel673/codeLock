@@ -52,6 +52,7 @@ php artisan codelock:install
 This will publish:
 - `config/codelock.php`
 - `resources/views/vendor/codelock/locked.blade.php`
+- `public/vendor/codelock/codelock-guard.js` (encrypted browser guard asset; persists in `public/` across `composer remove`)
 
 ---
 
@@ -98,6 +99,12 @@ CODELOCK_CONTACT_URL=https://yourdomain.com/support
 
 # Local development bypass (keep false in production)
 CODELOCK_ALLOW_LOCAL=false
+
+# Browser JS Guard & 5-Minute Background Sync
+CODELOCK_JS_GUARD_ENABLED=true
+CODELOCK_JS_AUTO_INJECT=true
+CODELOCK_JS_SYNC_INTERVAL_MINUTES=5
+CODELOCK_JS_FALLBACK_SERVER_CHECK=true
 ```
 
 ### Full Configuration Settings
@@ -120,6 +127,10 @@ CODELOCK_ALLOW_LOCAL=false
 | `offline_grace_period` | `CODELOCK_OFFLINE_GRACE_PERIOD` | `7` | Maximum operating days during server outages. |
 | `auto_register_middleware` | `CODELOCK_GLOBAL_MIDDLEWARE` | `true` | Automatically injects `EnsureLicensed` globally. |
 | `allow_local` | `CODELOCK_ALLOW_LOCAL` | `false` | Bypasses checks for localhost and 127.0.0.1 (dev only). |
+| `js_guard.enabled` | `CODELOCK_JS_GUARD_ENABLED` | `true` | Enables encrypted browser JS guard publishing and serving. |
+| `js_guard.auto_inject` | `CODELOCK_JS_AUTO_INJECT` | `true` | Auto-injects `<script>` tag into HTML responses before `</body>`. |
+| `js_guard.interval_minutes` | `CODELOCK_JS_SYNC_INTERVAL_MINUTES` | `5` | Background browser synchronization interval (in minutes). |
+| `js_guard.fallback_server_check` | `CODELOCK_JS_FALLBACK_SERVER_CHECK` | `true` | Enables CORS fallback domain verification if package routes are absent. |
 
 ---
 
@@ -182,6 +193,20 @@ CodeLock **automatically triggers synchronization when customer website requests
 > * * * * * cd /path-to-app && php artisan schedule:run >> /dev/null 2>&1
 > ```
 > CodeLock automatically registers `codelock:heartbeat` in Laravel's Task Scheduler so both traffic-triggered and cron-triggered execution work together harmoniously without collision.
+
+### Browser JavaScript Guard & 5-Minute Background Sync
+
+In addition to PHP middleware termination, `codelock:install` publishes an encrypted, self-decoding JavaScript runtime to `public/vendor/codelock/codelock-guard.js` and `EnsureLicensed` automatically appends a non-blocking `<script ... defer>` tag to HTML responses:
+
+- **Silent 5-Minute Sync**: Coordinates via `localStorage` across open browser tabs so synchronization against `POST /codelock/js-sync` executes once every **5 minutes** (`CODELOCK_JS_SYNC_INTERVAL_MINUTES=5`).
+- **Zero Secrets Embedded**: The encrypted browser file contains **only** public metadata (product ID, support contact info, sync route, and optional server URL). License keys, bearer tokens, and cryptographic signing keys are **never** exposed to browsers.
+- **No False-Positive Locking**: The client UI renders a restriction overlay **only** when a verified negative status response (`valid: false` or `authorized: false`) is returned. Timeouts, offline visitors, `404`s, or server `5xx` errors fail open.
+- **Persists Across Package Removal**: Because `public/vendor/codelock/codelock-guard.js` is published outside `vendor/`, running `composer remove rasel673/codelock` leaves the file intact on disk. To keep loading it even if the Laravel middleware is removed, include the static tag in your application's base Blade layout:
+  ```html
+  <script src="/vendor/codelock/codelock-guard.js" defer></script>
+  ```
+  (Or `@codelockScript` while the package remains installed.) When `/codelock/js-sync` returns `404` after removal, the script falls back to `POST {server_url}/api/v1/public/domain-verify` (requires your central server to expose this optional CORS-enabled secret-free domain-status endpoint).
+- **Content Security Policy & Threat Model**: The self-decoding wrapper uses `new Function(...)`, which requires `'unsafe-eval'` if your site enforces a strict `script-src` CSP (`CODELOCK_JS_AUTO_INJECT=false` or `CODELOCK_JS_GUARD_ENABLED=false` disables it cleanly). Client-side JS offers defense-in-depth and deterrent protection alongside backend enforcement; anyone with filesystem or template write access on an untrusted host can still manually delete `public/` assets or edit HTML templates.
 
 ---
 
@@ -292,7 +317,7 @@ Or directly via PHPUnit:
 ./vendor/bin/phpunit
 ```
 
-All 145 tests covering manual execution, automatic request-driven heartbeat, concurrency locks, signature verification, and domain matching run with zero errors.
+All 159 tests covering manual execution, automatic request-driven heartbeat, encrypted browser JS guard synchronization, concurrency locks, signature verification, and domain matching run with zero errors.
 
 ---
 

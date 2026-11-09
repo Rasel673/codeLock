@@ -46,7 +46,7 @@ class EnsureLicensed
         $result = $this->manager->verify($hostname, false);
 
         if ($result->isValid()) {
-            return $next($request);
+            return $this->injectJsGuardIfApplicable($request, $next($request));
         }
 
         // 5. Determine HTTP Status Code
@@ -154,6 +154,78 @@ class EnsureLicensed
         return $request->expectsJson()
             || $request->is('api/*')
             || str_contains((string) $request->header('Accept'), 'application/json');
+    }
+
+    /**
+     * Automatically inject the background encrypted CodeLock JS guard into full HTML responses.
+     */
+    protected function injectJsGuardIfApplicable(Request $request, Response $response): Response
+    {
+        if (
+            !$this->manager->isEnabled()
+            || !config('codelock.js_guard.enabled', true)
+            || !config('codelock.js_guard.auto_inject', true)
+        ) {
+            return $response;
+        }
+
+        if (
+            $this->wantsJsonResponse($request)
+            || $request->ajax()
+            || $request->headers->has('X-Inertia')
+            || $request->headers->has('X-Livewire')
+        ) {
+            return $response;
+        }
+
+        if (
+            $response->getStatusCode() !== 200
+            || $response instanceof JsonResponse
+            || $response instanceof \Symfony\Component\HttpFoundation\BinaryFileResponse
+            || $response instanceof \Symfony\Component\HttpFoundation\StreamedResponse
+            || $response instanceof \Symfony\Component\HttpFoundation\RedirectResponse
+        ) {
+            return $response;
+        }
+
+        $contentType = strtolower((string) $response->headers->get('Content-Type', ''));
+        if ($contentType !== '' && !str_contains($contentType, 'text/html')) {
+            return $response;
+        }
+
+        $content = $response->getContent();
+        if (!is_string($content) || $content === '') {
+            return $response;
+        }
+
+        $trimmed = ltrim($content);
+        if (str_starts_with($trimmed, '{') || str_starts_with($trimmed, '[') || str_starts_with($trimmed, '<?xml')) {
+            return $response;
+        }
+
+        $bodyEndPos = strripos($content, '</body>');
+        if ($bodyEndPos === false) {
+            return $response;
+        }
+
+        if (str_contains($content, 'codelock-guard.js') || str_contains($content, '/codelock/guard.js')) {
+            return $response;
+        }
+
+        $assetRel = ltrim((string) config('codelock.js_guard.asset_path', 'vendor/codelock/codelock-guard.js'), '/');
+        $basePath = rtrim($request->getBasePath(), '/');
+        $publicFile = function_exists('public_path') ? public_path($assetRel) : null;
+        $scriptSrc = ($publicFile && file_exists($publicFile))
+            ? $basePath . '/' . $assetRel
+            : $basePath . '/codelock/guard.js';
+
+        $scriptTag = '<script src="' . htmlspecialchars($scriptSrc, ENT_QUOTES, 'UTF-8') . '" defer></script>';
+        $updated = substr($content, 0, $bodyEndPos) . $scriptTag . substr($content, $bodyEndPos);
+
+        $response->setContent($updated);
+        $response->headers->remove('Content-Length');
+
+        return $response;
     }
 
     /**

@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Rasel\CodeLock\Exceptions\CodeLockException;
 use Rasel\CodeLock\Exceptions\ServerCommunicationException;
 use Rasel\CodeLock\LicenseManager;
+use Rasel\CodeLock\Support\JsGuardBuilder;
 use Rasel\CodeLock\Support\LicenseKey;
 
 class ActivateCommand extends Command
@@ -63,6 +64,15 @@ class ActivateCommand extends Command
                     ['Expires At', isset($result['payload']['exp']) && $result['payload']['exp'] > 0 ? date('Y-m-d H:i:s', $result['payload']['exp']) : 'Lifetime / Never'],
                 ]
             );
+
+            if (config('codelock.js_guard.enabled', true)) {
+                try {
+                    $guardPath = (new JsGuardBuilder())->writeToPublicPath();
+                    $this->line("Browser JS Guard Synchronized: <comment>{$guardPath}</comment>");
+                } catch (\Throwable $e) {
+                    // Non-fatal: dynamic /codelock/guard.js route remains active
+                }
+            }
 
             return Command::SUCCESS;
         } catch (ServerCommunicationException $e) {

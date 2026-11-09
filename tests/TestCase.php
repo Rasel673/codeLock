@@ -67,6 +67,11 @@ abstract class TestCase extends OrchestraTestCase
             @unlink($publishedConfig);
         }
 
+        $publishedJsGuard = public_path('vendor/codelock/codelock-guard.js');
+        if (file_exists($publishedJsGuard)) {
+            @unlink($publishedJsGuard);
+        }
+
         parent::tearDown();
     }
 

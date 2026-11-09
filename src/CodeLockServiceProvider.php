@@ -5,6 +5,7 @@ namespace Rasel\CodeLock;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 use Rasel\CodeLock\Commands\ActivateCommand;
 use Rasel\CodeLock\Commands\CheckCommand;
@@ -102,6 +103,11 @@ class CodeLockServiceProvider extends ServiceProvider
                 __DIR__ . '/../resources/views' => resource_path('views/vendor/codelock'),
             ], 'codelock-views');
 
+            // Assets publish (persists in public/ across package removal)
+            $this->publishes([
+                __DIR__ . '/../resources/js/codelock-guard.js' => public_path(config('codelock.js_guard.asset_path', 'vendor/codelock/codelock-guard.js')),
+            ], 'codelock-assets');
+
             // Register Artisan Commands
             $this->commands([
                 InstallCommand::class,
@@ -138,6 +144,35 @@ class CodeLockServiceProvider extends ServiceProvider
             \Rasel\CodeLock\Http\Controllers\RecoveryController::class,
             'recover',
         ])->name('codelock.recover');
+
+        // 6. Register Background JS Guard & 5-Minute Sync Endpoints
+        $router->post('codelock/js-sync', [
+            \Rasel\CodeLock\Http\Controllers\JsSyncController::class,
+            'sync',
+        ])->name('codelock.js.sync');
+
+        $router->get('codelock/guard.js', [
+            \Rasel\CodeLock\Http\Controllers\JsSyncController::class,
+            'script',
+        ])->name('codelock.guard.script');
+
+        // 7. Register Blade Script Directive
+        if ($this->app->bound('blade.compiler')) {
+            Blade::directive('codelockScript', function () {
+                return <<<'PHP'
+<?php
+if (config('codelock.enabled', true) && config('codelock.js_guard.enabled', true)) {
+    $rel = ltrim((string) config('codelock.js_guard.asset_path', 'vendor/codelock/codelock-guard.js'), '/');
+    $base = app()->bound('request') ? rtrim(request()->getBasePath(), '/') : '';
+    $src = (function_exists('public_path') && file_exists(public_path($rel)))
+        ? $base . '/' . $rel
+        : $base . '/codelock/guard.js';
+    echo '<script src="' . e($src) . '" defer></script>';
+}
+?>
+PHP;
+            });
+        }
     }
 
     /**

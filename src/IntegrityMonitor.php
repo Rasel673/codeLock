@@ -54,6 +54,8 @@ class IntegrityMonitor
             'src/LicenseClient.php',
             'src/HeartbeatResult.php',
             'src/Commands/HeartbeatCommand.php',
+            'src/Support/JsGuardBuilder.php',
+            'src/Http/Controllers/JsSyncController.php',
         ];
     }
 
